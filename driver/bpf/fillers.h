@@ -2004,14 +2004,24 @@ static __always_inline bool bpf_kgid_has_mapping(struct user_namespace *targ, kg
 	return bpf_map_id_up(&targ->gid_map, __kgid_val(kgid)) != (gid_t) -1;
 }
 
-static __always_inline bool get_exe_writable(struct task_struct *task)
+static __always_inline struct inode *get_exe_inode(struct task_struct *task)
 {
-	struct mm_struct *mm = _READ(task->mm);
-	struct file *exe_file = _READ(mm->exe_file);
-	return _READ(exe_file->f_inode);
+	struct file *exe_file;
+	struct mm_struct *mm;
+	
+	mm = _READ(task->mm);
+	exe_file = _READ(mm->exe_file);
+	if (!exe_file) 
+	{
+		return NULL;
+	}
+
+	struct inode *inode = _READ(exe_file->f_inode);
+
+	return inode;
 }
 
-static __always_inline bool get_exe_writable(struct inode *inode, struct cred *cred)
+static __always_inline bool get_exe_writable(struct task_struct *task, struct inode *inode)
 {
 	umode_t i_mode = _READ(inode->i_mode);
 	unsigned i_flags = _READ(inode->i_flags);
@@ -2094,16 +2104,17 @@ static __always_inline bool get_exe_upper_layer(struct inode *inode)
 {
 	struct super_block *sb = _READ(inode->i_sb);
 	unsigned long sb_magic = _READ(sb->s_magic);
-	if(sb_magic == PPM_OVERLAYFS_SUPER_MAGIC)
+
+	if(sb_magic == OVERLAYFS_SUPER_MAGIC)
 	{
-		struct dentry *upper_dentry = NULL;
+		struct dentry *upper_dentry;
+		struct inode *lower_inode;
 		char *vfs_inode = (char *)inode;
 		
-		// Pointer arithmetics due to unexported ovl_inode struct
-		// warning: this works if and only if the dentry pointer is placed right after the inode struct
 		bpf_probe_read(&upper_dentry, sizeof(upper_dentry), vfs_inode + sizeof(struct inode));
+		bpf_probe_read(&lower_inode, sizeof(lower_inode), vfs_inode + sizeof(struct inode) + sizeof(struct dentry *));
 
-		if(upper_dentry)
+		if(!lower_inode && upper_dentry)
 		{
 			return true;
 		}
@@ -2620,16 +2631,31 @@ FILLER(execve_family_flags, true)
 	uint32_t flags = 0;
 	int res = 0;
 	bool exe_writable = false;
+	bool exe_upper_layer = false;
 
 	task = (struct task_struct *)bpf_get_current_task();
 
-	/*
-	 * exe_writable
-	 */
-	exe_writable = get_exe_writable(task);
-	if (exe_writable) 
+	struct inode *inode = get_exe_inode(task);
+
+	if(inode)
 	{
-		flags |= PPM_EXE_WRITABLE;
+		/*
+		* exe_writable
+		*/
+		exe_writable = get_exe_writable(task, inode);
+		if (exe_writable) 
+		{
+			flags |= PPM_EXE_WRITABLE;
+		}
+
+		/*
+		* exe_upper_layer
+		*/
+		exe_upper_layer = get_exe_upper_layer(inode);
+		if (exe_upper_layer)
+		{
+			flags |= PPM_EXE_UPPER_LAYER;
+		}
 	}
 
 	// write all additional flags for execve family here...
@@ -5737,10 +5763,9 @@ FILLER(sched_prog_exec_4, false)
 
 	/* `exe_writable` and `exe_upper_layer` flag logic */
 	bool exe_writable = false;
-	bool exe_upper_layer = false;
 	struct inode *inode = get_exe_inode(task);
-
-	if(inode)
+	exe_writable = get_exe_writable(task, inode);
+	if(exe_writable)
 	{
 		exe_writable = get_exe_writable(inode, cred);
 		if(exe_writable)
