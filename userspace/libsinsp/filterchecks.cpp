@@ -1860,6 +1860,13 @@ const filtercheck_field_info sinsp_filter_check_thread_fields[] =
 	{PT_BOOL, EPF_NONE, PF_NA, "proc.is_container_liveness_probe", "Process Is Container Liveness", "true if this process is running as a part of the container's liveness probe."},
 	{PT_BOOL, EPF_NONE, PF_NA, "proc.is_container_readiness_probe", "Process Is Container Readiness", "true if this process is running as a part of the container's readiness probe."},
 	{PT_BOOL, EPF_NONE, PF_NA, "proc.is_exe_writable", "Process Executable Is Writable", "true if this process' executable file is writable by the same user that spawned the process."},
+	{PT_CHARBUF, EPF_NONE, PF_NA, "thread.cap_permitted", "Permitted capabilities", "The permitted capabilities set"},
+	{PT_CHARBUF, EPF_NONE, PF_NA, "thread.cap_inheritable", "Inheritable capabilities", "The inheritable capabilities set"},
+	{PT_CHARBUF, EPF_NONE, PF_NA, "thread.cap_effective", "Effective capabilities", "The effective capabilities set"},
+	{PT_UINT64, EPF_NONE, PF_DEC, "proc.cmdnargs", "Number of cmd args", "The number of cmd args."},
+	{PT_UINT64, EPF_NONE, PF_DEC, "proc.cmdlenargs", "Total Count of Chars in cmd args", "The total count of characters / length of all cmd args combined excluding whitespaces."},
+	{PT_INT64, EPF_NONE, PF_ID, "proc.pvpid", "Parent Virtual Process ID", "the id of the parent process generating the event as seen from its current PID namespace."},
+	{PT_BOOL, EPF_NONE, PF_NA, "proc.is_exe_upper_layer", "Process Executable Is In Upper Layer", "true if this process' executable file is in upper layer in overlayfs. This field value can only be trusted if the underlying kernel version is greater or equal than 3.18.0, since overlayfs was introduced at that time."},
 };
 
 sinsp_filter_check_thread::sinsp_filter_check_thread()
@@ -2661,6 +2668,50 @@ uint8_t* sinsp_filter_check_thread::extract(sinsp_evt *evt, OUT uint32_t* len, b
 	case TYPE_IS_EXE_WRITABLE:
 		m_tbool = tinfo->m_exe_writable;
 		RETURN_EXTRACT_VAR(m_tbool);
+	case TYPE_IS_EXE_UPPER_LAYER:
+		m_tbool = tinfo->m_exe_upper_layer;
+		RETURN_EXTRACT_VAR(m_tbool);
+	case TYPE_CAP_PERMITTED:
+		m_tstr = sinsp_utils::caps_to_string(tinfo->m_cap_permitted);
+		RETURN_EXTRACT_STRING(m_tstr);
+	case TYPE_CAP_INHERITABLE:
+		m_tstr = sinsp_utils::caps_to_string(tinfo->m_cap_inheritable);
+		RETURN_EXTRACT_STRING(m_tstr);
+	case TYPE_CAP_EFFECTIVE:
+		m_tstr = sinsp_utils::caps_to_string(tinfo->m_cap_effective);
+		RETURN_EXTRACT_STRING(m_tstr);
+	case TYPE_CMDNARGS:
+		{
+			m_u64val = (uint32_t)tinfo->m_args.size();
+			RETURN_EXTRACT_VAR(m_u64val);
+		}
+	case TYPE_CMDLENARGS:
+		{
+			m_u64val = 0;
+			uint32_t j;
+			uint32_t nargs = (uint32_t)tinfo->m_args.size();
+
+			for(j = 0; j < nargs; j++)
+			{
+				m_u64val += tinfo->m_args[j].length();
+
+			}
+			RETURN_EXTRACT_VAR(m_u64val);
+		}
+	case TYPE_PVPID:
+		{
+			sinsp_threadinfo* ptinfo =
+				m_inspector->get_thread_ref(tinfo->m_ptid, false, true).get();
+
+			if(ptinfo != NULL)
+			{
+				RETURN_EXTRACT_VAR(ptinfo->m_vpid);
+			}
+			else
+			{
+				return NULL;
+			}
+		}
 	default:
 		ASSERT(false);
 		return NULL;
