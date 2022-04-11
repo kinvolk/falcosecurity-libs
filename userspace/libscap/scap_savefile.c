@@ -376,7 +376,41 @@ int32_t scap_write_proclist_entry_bufs(scap_t *handle, scap_dumper_t *d, struct 
 	envlen = iov_size(envs, envscnt);
 	cgroupslen = iov_size(cgroups, cgroupscnt);
 
-	if(scap_dump_write(d, &len, sizeof(uint32_t)) != sizeof(uint32_t) ||
+	//
+	// NB: new fields must be appended
+	//
+	*len = (uint32_t)(sizeof(uint32_t) + // len
+			  sizeof(uint64_t) + // tid
+			  sizeof(uint64_t) + // pid
+			  sizeof(uint64_t) + // ptid
+			  sizeof(uint64_t) + // sid
+			  sizeof(uint64_t) + // vpgid
+			  2 + commlen +
+			  2 + exelen +
+			  2 + exepathlen +
+			  2 + argslen +
+			  2 + cwdlen +
+			  sizeof(uint64_t) + // fdlimit
+			  sizeof(uint32_t) + // flags
+			  sizeof(uint32_t) + // uid
+			  sizeof(uint32_t) + // gid
+			  sizeof(uint32_t) + // vmsize_kb
+			  sizeof(uint32_t) + // vmrss_kb
+			  sizeof(uint32_t) + // vmswap_kb
+			  sizeof(uint64_t) + // pfmajor
+			  sizeof(uint64_t) + // pfminor
+			  2 + envlen +
+			  sizeof(int64_t) + // vtid
+			  sizeof(int64_t) + // vpid
+			  2 + cgroupslen +
+			  2 + rootlen +
+			  sizeof(int32_t) +  // loginuid
+			  sizeof(uint8_t) +  // exe_writable
+			  sizeof(uint64_t) + // cap_inheritable
+			  sizeof(uint64_t) + // cap_permitted
+			  sizeof(uint64_t) + // cap_effective
+			  sizeof(uint8_t)); // exe_upper_layer
+	if(scap_dump_write(d, len, sizeof(uint32_t)) != sizeof(uint32_t) ||
 		    scap_dump_write(d, &(tinfo->tid), sizeof(uint64_t)) != sizeof(uint64_t) ||
 		    scap_dump_write(d, &(tinfo->pid), sizeof(uint64_t)) != sizeof(uint64_t) ||
 		    scap_dump_write(d, &(tinfo->ptid), sizeof(uint64_t)) != sizeof(uint64_t) ||
@@ -410,7 +444,11 @@ int32_t scap_write_proclist_entry_bufs(scap_t *handle, scap_dumper_t *d, struct 
 		    scap_dump_write(d, &rootlen, sizeof(uint16_t)) != sizeof(uint16_t) ||
                     scap_dump_write(d, (char *) root, rootlen) != rootlen ||
             scap_dump_write(d, &(tinfo->loginuid), sizeof(uint32_t)) != sizeof(uint32_t) ||
-			scap_dump_write(d, &(tinfo->exe_writable), sizeof(uint8_t)) != sizeof(uint8_t))
+			scap_dump_write(d, &(tinfo->exe_writable), sizeof(uint8_t)) != sizeof(uint8_t) ||
+			scap_dump_write(d, &(tinfo->cap_inheritable), sizeof(uint64_t)) != sizeof(uint64_t) ||
+			scap_dump_write(d, &(tinfo->cap_permitted), sizeof(uint64_t)) != sizeof(uint64_t) ||
+			scap_dump_write(d, &(tinfo->cap_effective), sizeof(uint64_t)) != sizeof(uint64_t) || 
+			scap_dump_write(d, &(tinfo->exe_upper_layer), sizeof(uint8_t)) != sizeof(uint8_t))
 	{
 		snprintf(handle->m_lasterr, SCAP_LASTERR_SIZE, "error writing to file (2)");
 		return SCAP_FAILURE;
