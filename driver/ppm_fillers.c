@@ -1259,7 +1259,8 @@ cgroups_error:
 					unsigned long sb_magic = 0;
 
 					sb = exe_file->f_inode->i_sb;
-					if(sb)
+					sb_magic = sb->s_magic;
+					if(sb_magic == PPM_OVERLAYFS_SUPER_MAGIC)
 					{
 						sb_magic = sb->s_magic;
 						if(sb_magic == PPM_OVERLAYFS_SUPER_MAGIC)
