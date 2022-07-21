@@ -99,8 +99,10 @@ bool cri_async_source::parse_cri(sinsp_container_info& container, const libsinsp
 			container.m_is_pod_sandbox = true;
 			return true;
 		}
-		g_logger.format(sinsp_logger::SEV_ERROR, "cri (%s): id is neither a container nor a pod sandbox",
-			container.m_id.c_str());
+		g_logger.format(sinsp_logger::SEV_ERROR, "cri (%s): ContainerStatus returned error (%s) (%d) and id is neither a container nor a pod sandbox",
+			container.m_id.c_str(),
+			status.error_message().c_str(),
+			status.error_code());
 		return false;
 	}
 
