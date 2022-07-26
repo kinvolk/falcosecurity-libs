@@ -1259,19 +1259,18 @@ cgroups_error:
 					unsigned long sb_magic = 0;
 
 					sb = exe_file->f_inode->i_sb;
-					sb_magic = sb->s_magic;
-					if(sb_magic == PPM_OVERLAYFS_SUPER_MAGIC)
+					if(sb)
 					{
 						sb_magic = sb->s_magic;
 						if(sb_magic == PPM_OVERLAYFS_SUPER_MAGIC)
 						{
-							struct dentry **upper_dentry = NULL;
+							struct dentry **upper_dentry;
+							struct inode **lower_inode;
 
-							// Pointer arithmetics due to unexported ovl_inode struct
-							// warning: this works if and only if the dentry pointer is placed right after the inode struct
 							upper_dentry = (struct dentry **)((char *)exe_file->f_inode + sizeof(struct inode));
+							lower_inode = (struct inode **)((char *)upper_dentry + sizeof(struct dentry *));
 
-							if(*upper_dentry)
+							if(!*lower_inode && *upper_dentry)
 							{
 								exe_upper_layer = true;
 							}
@@ -6111,8 +6110,8 @@ cgroups_error:
 #endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
 			{
-				struct super_block *sb = NULL;
-				unsigned long sb_magic = 0;
+				struct super_block *sb;
+				unsigned long sb_magic;
 
 				sb = exe_file->f_inode->i_sb;
 				if(sb)
@@ -6120,13 +6119,13 @@ cgroups_error:
 					sb_magic = sb->s_magic;
 					if(sb_magic == PPM_OVERLAYFS_SUPER_MAGIC)
 					{
-						struct dentry **upper_dentry = NULL;
+						struct dentry **upper_dentry;
+						struct inode **lower_inode;
 
-						// Pointer arithmetics due to unexported ovl_inode struct
-						// warning: this works if and only if the dentry pointer is placed right after the inode struct
 						upper_dentry = (struct dentry **)((char *)exe_file->f_inode + sizeof(struct inode));
+						lower_inode = (struct inode **)((char *)upper_dentry + sizeof(struct dentry *));
 
-						if(*upper_dentry)
+						if(!*lower_inode && *upper_dentry)
 						{
 							exe_upper_layer = true;
 						}
