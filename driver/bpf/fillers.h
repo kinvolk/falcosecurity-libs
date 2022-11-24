@@ -2006,16 +2006,8 @@ static __always_inline bool bpf_kgid_has_mapping(struct user_namespace *targ, kg
 
 static __always_inline struct inode *get_exe_inode(struct task_struct *task)
 {
-	struct file *exe_file;
-	struct mm_struct *mm;
-	
-	mm = _READ(task->mm);
-	exe_file = _READ(mm->exe_file);
-	if (!exe_file) 
-	{
-		return NULL;
-	}
-
+	struct mm_struct *mm = _READ(task->mm);
+	struct file *exe_file = _READ(mm->exe_file);
 	return _READ(exe_file->f_inode);
 }
 
@@ -2024,10 +2016,6 @@ static __always_inline bool get_exe_writable(struct inode *inode, struct cred *c
 	umode_t i_mode = _READ(inode->i_mode);
 	unsigned i_flags = _READ(inode->i_flags);
 	struct super_block *sb = _READ(inode->i_sb);
-	if(sb == NULL)
-	{
-		return false;
-	}
 	kuid_t i_uid = _READ(inode->i_uid);
 	kgid_t i_gid = _READ(inode->i_gid);
 
@@ -2104,11 +2092,6 @@ static __always_inline bool get_exe_writable(struct inode *inode, struct cred *c
 static __always_inline bool get_exe_upper_layer(struct inode *inode)
 {
 	struct super_block *sb = _READ(inode->i_sb);
-	if(sb == NULL)
-	{
-		return false;
-	}
-
 	unsigned long sb_magic = _READ(sb->s_magic);
 	if(sb_magic == PPM_OVERLAYFS_SUPER_MAGIC)
 	{
@@ -2116,6 +2099,7 @@ static __always_inline bool get_exe_upper_layer(struct inode *inode)
 		char *vfs_inode = (char *)inode;
 		
 		// Pointer arithmetics due to unexported ovl_inode struct
+		// warning: this works if and only if the dentry pointer is placed right after the inode struct
 		bpf_probe_read(&upper_dentry, sizeof(upper_dentry), vfs_inode + sizeof(struct inode));
 
 		if(upper_dentry)
@@ -5769,9 +5753,10 @@ FILLER(sched_prog_exec_4, false)
 	bool exe_writable = false;
 	bool exe_upper_layer = false;
 	struct inode *inode = get_exe_inode(task);
+
 	if(inode)
 	{
-		exe_writable = get_exe_writable(task, inode);
+		exe_writable = get_exe_writable(inode, cred);
 		if(exe_writable)
 		{
 			flags |= PPM_EXE_WRITABLE;
